@@ -19,7 +19,7 @@ pub enum Expression<'a> {
     Literal(Literal<'a>),
 }
 impl Expression<'_> {
-    fn accept_visitor<R>(&self, visitor: &dyn ExpressionVisitor<R>) -> R {
+    pub fn accept_visitor<R>(&self, visitor: &dyn ExpressionVisitor<R>) -> R {
         match self {
             Expression::Binary(binary) => visitor.visit_binary_expression(binary),
             Expression::Unary(unary) => visitor.visit_unary_expression(unary),
