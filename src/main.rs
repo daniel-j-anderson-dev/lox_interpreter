@@ -6,7 +6,9 @@ use std::{
     io::{self, Write},
 };
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+type BoxedStdError = Box<dyn std::error::Error>;
+
+fn main() -> Result<(), BoxedStdError> {
     let args = env::args().collect::<Vec<_>>();
 
     match args.get(0).map(|s| s.as_str()) {
@@ -25,31 +27,37 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 fn run_prompt() -> Result<(), io::Error> {
     loop {
-        io::stdout().write_all(b"> ")?;
-        io::stdout().flush()?;
-
-        let mut source = String::new();
-        io::stdin().read_line(&mut source)?;
-
-        if let Err(e) = run(&source) {
-            writeln!(io::stdout(), "{}", e)?;
-        }
+        let source = get_input("> ")?;
+        print_tokens(&source)?;
     }
 }
 
-fn run_file(path: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn run_file(path: &str) -> Result<(), BoxedStdError> {
     let source = fs::read_to_string(path)?;
-    run(&source)?;
+    print_tokens(&source)?;
     Ok(())
 }
 
-fn run(source: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn print_tokens(source: &str) -> Result<(), io::Error> {
     for possible_token in Lexer::new(source) {
         match possible_token {
             Ok(token) => writeln!(io::stdout(), "{}", token)?,
             Err(error) => writeln!(io::stderr(), "{}", error)?,
         }
     }
-
     Ok(())
+}
+
+fn get_input(prompt: &str) -> Result<String, io::Error> {
+    {
+        let mut stdout = io::stdout();
+        stdout.write_all(prompt.as_bytes())?;
+        stdout.flush()?;
+    }
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    input.truncate(input.trim_end().len());
+
+    Ok(input)
 }
