@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::lox::token::{Token, TokenKind};
+use super::token::{Token, TokenKind};
 
 /// Lazily split lox source code into tokens.
 /// When used as an [Iterator]: [None] represents a [TokenKind::EndOfFile]
@@ -15,9 +15,9 @@ impl<'a> Iterator for Lexer<'a> {
     type Item = Result<Token<'a>, LexerError>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.end_of_file_emitted {
-            return None
+            return None;
         }
-        
+
         match self.next_token() {
             Ok(token) => Some(Ok(token)),
             Err(error) => Some(Err(error)),
@@ -83,8 +83,6 @@ impl<'a> Lexer<'a> {
             }
             b'/' => self.get_current_token(TokenKind::Slash),
             b'"' => {
-                let open_quote_index = self.lexeme_start;
-                
                 self.consume_string_literal()?;
 
                 // ignore start and end '"'
