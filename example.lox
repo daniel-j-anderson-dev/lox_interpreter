@@ -12,7 +12,7 @@ class Duck {
   }
 }
 
-"
+🍎🍎
 
 var duck = Duck("Waddles");
 duck.quack();
