@@ -1,6 +1,43 @@
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
+pub struct OwnedToken {
+    kind: TokenKind,
+    lexeme: String,
+}
+impl OwnedToken {
+    pub fn new(kind: TokenKind, lexeme: &str) -> Self {
+        Self {
+            kind,
+            lexeme: lexeme.to_owned(),
+        }
+    }
+    pub const fn end_of_file() -> Token<'static> {
+        Token {
+            kind: TokenKind::EndOfFile,
+            lexeme: "",
+        }
+    }
+    pub const fn kind(&self) -> TokenKind {
+        self.kind
+    }
+    pub fn lexeme(&self) -> &str {
+        &self.lexeme
+    }
+    pub fn is_end_of_file(&self) -> bool {
+        self.kind == TokenKind::EndOfFile
+    }
+}
+impl From<Token<'_>> for OwnedToken {
+    fn from(value: Token<'_>) -> Self {
+        Self {
+            kind: value.kind,
+            lexeme: value.lexeme.to_owned(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Token<'a> {
     kind: TokenKind,
     lexeme: &'a str,
@@ -10,10 +47,16 @@ impl<'a> Token<'a> {
         Self { kind, lexeme }
     }
     pub const fn end_of_file() -> Token<'static> {
-        Token { kind: TokenKind::EndOfFile, lexeme: "" }
+        Token {
+            kind: TokenKind::EndOfFile,
+            lexeme: "",
+        }
     }
     pub const fn kind(&self) -> TokenKind {
         self.kind
+    }
+    pub const fn lexeme(&self) -> &'a str {
+        self.lexeme
     }
     pub fn is_end_of_file(&self) -> bool {
         self.kind == TokenKind::EndOfFile
