@@ -7,14 +7,14 @@ use std::{
 fn main() -> Result<(), io::Error> {
     let args = env::args().collect::<Vec<_>>();
 
-    if !args.get(0).is_some_and(|s| s.ends_with("rslox")) {
+    if !args.get(0).is_some_and(|s| s.ends_with("lox")) {
         panic!("Expected the first argument to be the program name")
     }
 
     match args.len() {
         1 => run_prompt()?,
         2 => run_file(&args[1])?,
-        _ => eprintln!("Usage: rslox [script]"),
+        _ => eprintln!("Usage: lox [script]"),
     };
 
     Ok(())
