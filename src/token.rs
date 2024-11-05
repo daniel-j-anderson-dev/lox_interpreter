@@ -1,55 +1,24 @@
 use std::fmt::{Debug, Display};
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct OwnedToken {
-    kind: TokenKind,
-    lexeme: String,
-}
-impl OwnedToken {
-    pub fn new(kind: TokenKind, lexeme: &str) -> Self {
-        Self {
-            kind,
-            lexeme: lexeme.to_owned(),
-        }
-    }
-    pub const fn end_of_file() -> Token<'static> {
-        Token {
-            kind: TokenKind::EndOfFile,
-            lexeme: "",
-        }
-    }
-    pub const fn kind(&self) -> TokenKind {
-        self.kind
-    }
-    pub fn lexeme(&self) -> &str {
-        &self.lexeme
-    }
-    pub fn is_end_of_file(&self) -> bool {
-        self.kind == TokenKind::EndOfFile
-    }
-}
-impl From<Token<'_>> for OwnedToken {
-    fn from(value: Token<'_>) -> Self {
-        Self {
-            kind: value.kind,
-            lexeme: value.lexeme.to_owned(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Token<'a> {
     kind: TokenKind,
     lexeme: &'a str,
+    line_number: usize,
 }
 impl<'a> Token<'a> {
-    pub const fn new(kind: TokenKind, lexeme: &'a str) -> Self {
-        Self { kind, lexeme }
+    pub const fn new(kind: TokenKind, lexeme: &'a str, line_number: usize) -> Self {
+        Self {
+            kind,
+            lexeme,
+            line_number,
+        }
     }
-    pub const fn end_of_file() -> Token<'static> {
+    pub const fn end_of_file(line_number: usize) -> Token<'static> {
         Token {
             kind: TokenKind::EndOfFile,
             lexeme: "",
+            line_number,
         }
     }
     pub const fn kind(&self) -> TokenKind {
@@ -58,13 +27,16 @@ impl<'a> Token<'a> {
     pub const fn lexeme(&self) -> &'a str {
         self.lexeme
     }
-    pub fn is_end_of_file(&self) -> bool {
-        self.kind == TokenKind::EndOfFile
+    pub const fn is_end_of_file(&self) -> bool {
+        self.kind.is_end_of_file()
+    }
+    pub const fn line_number(&self) -> usize {
+        self.line_number
     }
 }
 impl Display for Token<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?} {}", self.kind, self.lexeme)
+        write!(f, "{} {:?} {}", self.line_number, self.kind, self.lexeme)
     }
 }
 
@@ -132,4 +104,29 @@ impl TokenKind {
             _ => TokenKind::Identifier,
         }
     }
+    pub const fn is_end_of_file(&self) -> bool {
+        match self {
+            TokenKind::EndOfFile => true,
+            _ => false,
+        }
+    }
+    pub fn is_any(&self, kinds: &[TokenKind]) -> bool {
+        for kind in kinds {
+            if *self == *kind {
+                return true;
+            }
+        }
+
+        false
+    }
+    pub const EQUALITY_OPERATORS: &[Self] = &[TokenKind::BangEqual, TokenKind::EqualEqual];
+    pub const COMPARISON_OPERATORS: &[Self] = &[
+        TokenKind::Less,
+        TokenKind::LessEqual,
+        TokenKind::Greater,
+        TokenKind::GreaterEqual,
+    ];
+    pub const TERM_OPERATORS: &[Self] = &[TokenKind::Plus, TokenKind::Minus];
+    pub const FACTOR_OPERATORS: &[Self] = &[TokenKind::Star, TokenKind::Slash];
+    pub const UNARY_OPERATORS: &[Self] = &[TokenKind::Bang, TokenKind::Minus];
 }

@@ -48,21 +48,22 @@ fn parenthesizes(name: &str, expressions: &[&Expression]) -> String {
 
 #[test]
 fn ast_print() {
-    use crate::lox::token::TokenKind;
+    use crate::token::TokenKind;
 
     const EXPECTED: &'static str = "(* (- 123) (group 45.67))";
 
     let expression = Expression::Binary(Binary {
         left_operand: Box::new(Expression::Unary(Unary {
-            operator: Token::new(TokenKind::Minus, "-"),
+            operator: Token::new(TokenKind::Minus, "-", 0),
             right_operand: Box::new(Expression::Literal(Literal(Token::new(
                 TokenKind::Number,
                 "123",
+                0,
             )))),
         })),
-        operator: Token::new(TokenKind::Star, "*"),
+        operator: Token::new(TokenKind::Star, "*", 0),
         right_operand: Box::new(Expression::Grouping(Grouping(Box::new(
-            Expression::Literal(Literal(Token::new(TokenKind::Number, "45.67"))),
+            Expression::Literal(Literal(Token::new(TokenKind::Number, "45.67", 0))),
         )))),
     });
 

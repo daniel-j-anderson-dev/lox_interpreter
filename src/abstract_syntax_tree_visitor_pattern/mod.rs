@@ -2,7 +2,7 @@
 
 pub mod printer;
 
-use crate::lox::token::Token;
+use crate::token::Token;
 use std::ops::Deref;
 
 pub trait ExpressionVisitor<R> {
@@ -19,7 +19,7 @@ pub enum Expression<'a> {
     Literal(Literal<'a>),
 }
 impl Expression<'_> {
-    pub fn accept_visitor<R>(&self, visitor: &dyn ExpressionVisitor<R>) -> R {
+    pub fn accept_visitor<R>(&self, visitor: &impl ExpressionVisitor<R>) -> R {
         match self {
             Expression::Binary(binary) => visitor.visit_binary_expression(binary),
             Expression::Unary(unary) => visitor.visit_unary_expression(unary),

@@ -20,16 +20,19 @@ impl Display for Expression<'_> {
         fn parenthesizes(name: &str, expressions: &[&Expression]) -> String {
             let mut output = String::new();
 
-            output.push_str(&format!("({}", name));
+            output.push('(');
+            output.push_str(name);
+
             for expression in expressions {
-                output.push_str(&format!(" {}", expression));
+                output.push(' ');
+                output.push_str(&expression.to_string());
             }
             output.push(')');
 
             output
         }
 
-        let s = match self {
+        let output = match self {
             Expression::Binary {
                 left_operand,
                 operator,
@@ -43,24 +46,24 @@ impl Display for Expression<'_> {
             Expression::Literal(literal) => literal.lexeme().to_owned(),
         };
 
-        write!(f, "{}", s)
+        write!(f, "{}", output)
     }
 }
 
 #[test]
 fn ast_print() {
-    use crate::lox::token::TokenKind;
+    use crate::token::TokenKind;
 
     const EXPECTED: &'static str = "(* (- 123) (group 45.67))";
 
     let expression = Expression::Binary {
         left_operand: Box::new(Expression::Unary {
-            operator: Token::new(TokenKind::Minus, "-"),
-            right_operand: Box::new(Expression::Literal(Token::new(TokenKind::Number, "123"))),
+            operator: Token::new(TokenKind::Minus, "-", 0),
+            right_operand: Box::new(Expression::Literal(Token::new(TokenKind::Number, "123", 0))),
         }),
-        operator: Token::new(TokenKind::Star, "*"),
+        operator: Token::new(TokenKind::Star, "*", 0),
         right_operand: Box::new(Expression::Grouping(Box::new(Expression::Literal(
-            Token::new(TokenKind::Number, "45.67"),
+            Token::new(TokenKind::Number, "45.67", 0),
         )))),
     };
 

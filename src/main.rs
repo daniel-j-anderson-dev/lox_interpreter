@@ -1,20 +1,15 @@
-mod lox;
-
 use lox::lexer::Lexer;
 use std::{
     env, fs,
     io::{self, Write},
 };
 
-type BoxedStdError = Box<dyn std::error::Error>;
-
-fn main() -> Result<(), BoxedStdError> {
+fn main() -> Result<(), io::Error> {
     let args = env::args().collect::<Vec<_>>();
 
-    match args.get(0).map(|s| s.as_str()) {
-        Some("target/debug/rslox") | Some("target/release/rslox") | Some("rslox") => {}
-        _ => panic!("Expected the first argument to be the program name"),
-    };
+    if !args.get(0).is_some_and(|s| s.ends_with("rslox")) {
+        panic!("Expected the first argument to be the program name")
+    }
 
     match args.len() {
         1 => run_prompt()?,
@@ -32,7 +27,7 @@ fn run_prompt() -> Result<(), io::Error> {
     }
 }
 
-fn run_file(path: &str) -> Result<(), BoxedStdError> {
+fn run_file(path: &str) -> Result<(), io::Error> {
     let source = fs::read_to_string(path)?;
     print_tokens(&source)?;
     Ok(())

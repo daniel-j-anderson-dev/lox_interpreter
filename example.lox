@@ -12,7 +12,7 @@ class Duck {
   }
 }
 
-🍎🍎
+// 🍎🍎
 
 var duck = Duck("Waddles");
 duck.quack();
@@ -23,7 +23,8 @@ fun make_adder(n) {
   }
   return adder;
 }
-3. // number trailing dot error!!!!
+// "✅"
+// 3.
 var add5 = make_adder(5);
 print add5(1);
 print add5(100);

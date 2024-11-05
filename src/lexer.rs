@@ -9,6 +9,7 @@ pub struct Lexer<'a> {
     lexeme_start: usize,
     /// index of the byte currently being processed. one after the last byte in the current lexeme
     lexeme_end: usize,
+    line_number: usize,
     end_of_file_emitted: bool,
 }
 impl<'a> Iterator for Lexer<'a> {
@@ -31,13 +32,14 @@ impl<'a> Lexer<'a> {
             lexeme_start: 0,
             lexeme_end: 0,
             end_of_file_emitted: false,
+            line_number: 1,
         }
     }
 
     pub fn next_token(&mut self) -> Result<Token<'a>, LexerError> {
         if !self.current_byte_available() {
             self.end_of_file_emitted = true;
-            return Ok(Token::end_of_file());
+            return Ok(Token::end_of_file(self.line_number));
         }
 
         self.lexeme_start = self.lexeme_end;
@@ -88,7 +90,7 @@ impl<'a> Lexer<'a> {
                 // ignore start and end '"'
                 let string_literal_lexeme =
                     &self.source[self.lexeme_start + 1..self.lexeme_end - 1];
-                Token::new(TokenKind::String, string_literal_lexeme)
+                Token::new(TokenKind::String, string_literal_lexeme, self.line_number)
             }
             number if number.is_ascii_digit() => {
                 self.consume_number_literal()?;
@@ -100,6 +102,9 @@ impl<'a> Lexer<'a> {
                 self.get_current_token(token_kind)
             }
             whitespace if whitespace.is_ascii_whitespace() => {
+                if whitespace == b'\n' {
+                    self.line_number += 1;
+                }
                 self.consume_whitespace();
                 self.next_token()?
             }
@@ -143,7 +148,7 @@ impl<'a> Lexer<'a> {
 
     /// Creates a new [Token] using [Self::get_current_lexeme] for the lexeme and the given [TokenKind]
     fn get_current_token(&self, kind: TokenKind) -> Token<'a> {
-        Token::new(kind, self.get_current_lexeme())
+        Token::new(kind, self.get_current_lexeme(), self.line_number)
     }
 
     /// Makes the current lexeme include all bytes up to and including the first `'\n'`. Only call after `"//"` is found
@@ -155,6 +160,9 @@ impl<'a> Lexer<'a> {
     /// Makes the current lexeme include all bytes up to the first non-ascii whitespace (see [u8::is_ascii_whitespace])
     fn consume_whitespace(&mut self) {
         while self.current_byte_available() && self.get_current_byte().is_ascii_whitespace() {
+            if self.get_current_byte() == b'\n' {
+                self.line_number += 1;
+            }
             self.consume_current_byte();
         }
     }
@@ -228,28 +236,26 @@ impl Lexer<'_> {
     fn calculate_lexeme_position(&self) -> (usize, usize) {
         use unicode_segmentation::UnicodeSegmentation;
 
-        let mut row_number = 1;
         let mut column_number = 1;
 
-        for (i, c) in self.source.grapheme_indices(true) {
+        for (i, _c) in self
+            .source
+            .lines()
+            .nth(self.line_number - 1)
+            .unwrap()
+            .grapheme_indices(true)
+        {
             if i == self.lexeme_start {
                 break;
-            }
-
-            if c.contains("\n") {
-                row_number += 1;
-                column_number = 1;
             }
 
             column_number += 1;
         }
 
-        (row_number, column_number)
+        (self.line_number, column_number)
     }
     fn error(&mut self, kind: LexerErrorKind) -> LexerError {
         let (line_number, column_number) = self.calculate_lexeme_position();
-
-        self.consume_current_byte();
 
         LexerError {
             kind,
@@ -280,6 +286,11 @@ pub struct LexerError {
     kind: LexerErrorKind,
     line_number: usize,
     column_number: usize,
+}
+impl LexerError {
+    pub const fn line_number(&self) -> usize {
+        self.line_number
+    }
 }
 impl Display for LexerError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
