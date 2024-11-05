@@ -45,17 +45,17 @@ impl<'a> Parser<'a> {
     }
 }
 impl<'a> TryFrom<Lexer<'a>> for Parser<'a> {
-    type Error = ParseError;
+    type Error = ParseError<'a>;
     fn try_from(value: Lexer<'a>) -> Result<Self, Self::Error> {
         let tokens = value.collect::<Result<_, _>>()?;
         Ok(Self::new(tokens))
     }
 }
 impl<'a> Parser<'a> {
-    fn expression_rule(&mut self) -> Result<Box<Expression<'a>>, ParseError> {
+    fn expression_rule(&mut self) -> Result<Box<Expression<'a>>, ParseError<'a>> {
         self.equality_rule()
     }
-    fn equality_rule(&mut self) -> Result<Box<Expression<'a>>, ParseError> {
+    fn equality_rule(&mut self) -> Result<Box<Expression<'a>>, ParseError<'a>> {
         let mut expression = self.comparison_rule()?;
 
         while self.consume_current_token_of_kind(TokenKind::EQUALITY_OPERATORS) {
@@ -68,7 +68,7 @@ impl<'a> Parser<'a> {
 
         Ok(expression)
     }
-    fn comparison_rule(&mut self) -> Result<Box<Expression<'a>>, ParseError> {
+    fn comparison_rule(&mut self) -> Result<Box<Expression<'a>>, ParseError<'a>> {
         let mut expression = self.term_rule()?;
 
         while self.consume_current_token_of_kind(TokenKind::COMPARISON_OPERATORS) {
@@ -81,7 +81,7 @@ impl<'a> Parser<'a> {
 
         Ok(expression)
     }
-    fn term_rule(&mut self) -> Result<Box<Expression<'a>>, ParseError> {
+    fn term_rule(&mut self) -> Result<Box<Expression<'a>>, ParseError<'a>> {
         let mut expression = self.factor_rule()?;
 
         while self.consume_current_token_of_kind(TokenKind::TERM_OPERATORS) {
@@ -94,7 +94,7 @@ impl<'a> Parser<'a> {
 
         Ok(expression)
     }
-    fn factor_rule(&mut self) -> Result<Box<Expression<'a>>, ParseError> {
+    fn factor_rule(&mut self) -> Result<Box<Expression<'a>>, ParseError<'a>> {
         let mut expression = self.unary_rule()?;
 
         while self.consume_current_token_of_kind(TokenKind::FACTOR_OPERATORS) {
@@ -107,7 +107,7 @@ impl<'a> Parser<'a> {
 
         Ok(expression)
     }
-    fn unary_rule(&mut self) -> Result<Box<Expression<'a>>, ParseError> {
+    fn unary_rule(&mut self) -> Result<Box<Expression<'a>>, ParseError<'a>> {
         if self.consume_current_token_of_kind(TokenKind::UNARY_OPERATORS) {
             Ok(Box::new(Expression::Unary {
                 operator: self.peek_previous_token(),
@@ -117,7 +117,7 @@ impl<'a> Parser<'a> {
             self.primary_rule()
         }
     }
-    fn primary_rule(&mut self) -> Result<Box<Expression<'a>>, ParseError> {
+    fn primary_rule(&mut self) -> Result<Box<Expression<'a>>, ParseError<'a>> {
         if self.consume_current_token_of_kind(&[TokenKind::False]) {
             return Ok(Box::new(Expression::Literal(self.peek_previous_token())));
         }
@@ -135,7 +135,7 @@ impl<'a> Parser<'a> {
             if !self.consume_current_token_of_kind(&[TokenKind::RightParentheses]) {
                 return Err(ParseError {
                     kind: ParseErrorKind::MissingRightParenthesis,
-                    line_number: self.peek_current_token().line_number(),
+                    token: self.peek_current_token(),
                 });
             }
             return Ok(Box::new(Expression::Grouping(expression)));
@@ -143,28 +143,68 @@ impl<'a> Parser<'a> {
 
         Err(ParseError {
             kind: ParseErrorKind::ExpectedExpression,
-            line_number: self.peek_current_token().line_number(),
+            token: self.peek_current_token(),
         })
     }
 }
 
 #[derive(Debug)]
-pub struct ParseError {
-    kind: ParseErrorKind,
-    line_number: usize,
+pub struct ParseError<'a> {
+    kind: ParseErrorKind<'a>,
+    token: Token<'a>,
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ParseErrorKind {
+pub enum ParseErrorKind<'a> {
     MissingRightParenthesis,
     ExpectedExpression,
     UnaryExpressionMissingOperand,
-    LexerError(LexerError),
+    LexerError(LexerError<'a>),
 }
-impl From<LexerError> for ParseError {
-    fn from(value: LexerError) -> Self {
+impl<'a> From<LexerError<'a>> for ParseError<'a> {
+    fn from(value: LexerError<'a>) -> Self {
         Self {
-            line_number: value.line_number(),
+            token: value.token(),
             kind: ParseErrorKind::LexerError(value),
+        }
+    }
+}
+impl std::fmt::Display for ParseErrorKind<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ParseErrorKind::MissingRightParenthesis => write!(f, "Missing closing parenthesis"),
+            ParseErrorKind::ExpectedExpression => write!(f, "No rule matched. Expected expression"),
+            ParseErrorKind::UnaryExpressionMissingOperand => {
+                write!(f, "Unary operator must have an expression after")
+            }
+            ParseErrorKind::LexerError(lexer_error) => write!(f, "{}", lexer_error),
+        }
+    }
+}
+
+impl std::fmt::Display for ParseError<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Error parsing {:?} token: \"{}\" on line {}: {}",
+            self.token.kind(),
+            self.token.lexeme(),
+            self.token.line_number(),
+            self.kind
+        )
+    }
+}
+
+#[test]
+fn test_parser() {
+    const SOURCE: &str = include_str!("../simple_example.lox");
+    let lexer = Lexer::new(SOURCE);
+    let mut parser = Parser::try_from(lexer).unwrap();
+
+    loop {
+        match parser.equality_rule() {
+            Ok(expression) => println!("{}", expression),
+            Err(parse_error) if !parse_error.token.is_end_of_file() => eprintln!("{}", parse_error),
+            _ => break,
         }
     }
 }

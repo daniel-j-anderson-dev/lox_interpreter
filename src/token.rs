@@ -42,6 +42,7 @@ impl Display for Token<'_> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenKind {
+    Unrecognized,
     EndOfFile,
     LeftParentheses,
     RightParentheses,

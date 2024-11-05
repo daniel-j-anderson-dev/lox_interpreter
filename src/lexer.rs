@@ -13,7 +13,7 @@ pub struct Lexer<'a> {
     end_of_file_emitted: bool,
 }
 impl<'a> Iterator for Lexer<'a> {
-    type Item = Result<Token<'a>, LexerError>;
+    type Item = Result<Token<'a>, LexerError<'a>>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.end_of_file_emitted {
             return None;
@@ -36,7 +36,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub fn next_token(&mut self) -> Result<Token<'a>, LexerError> {
+    pub fn next_token(&mut self) -> Result<Token<'a>, LexerError<'a>> {
         if !self.current_byte_available() {
             self.end_of_file_emitted = true;
             return Ok(Token::end_of_file(self.line_number));
@@ -110,8 +110,8 @@ impl<'a> Lexer<'a> {
             }
             _ => {
                 self.consume_unrecognized_lexeme();
-                let unrecognized_lexeme = self.get_current_lexeme().to_owned();
-                return Err(self.error(LexerErrorKind::Unrecognized(unrecognized_lexeme)));
+                let unrecognized_token = self.get_current_token(TokenKind::Unrecognized);
+                return Err(self.error(unrecognized_token, LexerErrorKind::Unrecognized));
             }
         };
 
@@ -170,7 +170,7 @@ impl<'a> Lexer<'a> {
     /// Makes the current lexeme include all bytes up to and including the closing `'"'`. Only call after an opening '"'
     /// # Error
     /// When there is no closing `'"'`
-    fn consume_string_literal(&mut self) -> Result<(), LexerError> {
+    fn consume_string_literal(&mut self) -> Result<(), LexerError<'a>> {
         while self.current_byte_available() {
             let current_byte = self.get_current_byte();
 
@@ -181,9 +181,10 @@ impl<'a> Lexer<'a> {
             }
         }
 
-        Err(self.error(LexerErrorKind::UnterminatedStringLiteral))
+        let token = self.get_current_token(TokenKind::String);
+        Err(self.error(token, LexerErrorKind::UnterminatedStringLiteral))
     }
-    fn consume_number_literal(&mut self) -> Result<(), LexerError> {
+    fn consume_number_literal(&mut self) -> Result<(), LexerError<'a>> {
         // consume all digit bytes before the dot
         while self.current_byte_available() && self.get_current_byte().is_ascii_digit() {
             self.consume_current_byte();
@@ -196,7 +197,8 @@ impl<'a> Lexer<'a> {
         if self.get_current_byte() == b'.' {
             // there must be a number after the dot
             if !self.next_byte_available() || !self.get_next_byte().is_ascii_digit() {
-                return Err(self.error(LexerErrorKind::NumberTrailingDot));
+                let token = self.get_current_token(TokenKind::Number);
+                return Err(self.error(token, LexerErrorKind::NumberTrailingDot));
             }
 
             // consume the dot
@@ -232,7 +234,7 @@ impl<'a> Lexer<'a> {
 }
 
 // Error helpers
-impl Lexer<'_> {
+impl<'a> Lexer<'a> {
     fn calculate_lexeme_position(&self) -> (usize, usize) {
         use unicode_segmentation::UnicodeSegmentation;
 
@@ -254,11 +256,12 @@ impl Lexer<'_> {
 
         (self.line_number, column_number)
     }
-    fn error(&mut self, kind: LexerErrorKind) -> LexerError {
+    fn error(&mut self, token: Token<'a>, kind: LexerErrorKind) -> LexerError<'a> {
         let (line_number, column_number) = self.calculate_lexeme_position();
 
         LexerError {
             kind,
+            token,
             line_number,
             column_number,
         }
@@ -267,7 +270,7 @@ impl Lexer<'_> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LexerErrorKind {
-    Unrecognized(String),
+    Unrecognized,
     UnterminatedStringLiteral,
     NumberTrailingDot,
 }
@@ -276,29 +279,36 @@ impl Display for LexerErrorKind {
         match self {
             LexerErrorKind::NumberTrailingDot => write!(f, "{:?}", self),
             LexerErrorKind::UnterminatedStringLiteral => write!(f, "{:?}", self),
-            LexerErrorKind::Unrecognized(s) => write!(f, "Unrecognized: {}", s),
+            LexerErrorKind::Unrecognized => write!(f, "Unrecognized token"),
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LexerError {
+pub struct LexerError<'a> {
     kind: LexerErrorKind,
+    token: Token<'a>,
     line_number: usize,
     column_number: usize,
 }
-impl LexerError {
+impl<'a> LexerError<'a> {
     pub const fn line_number(&self) -> usize {
         self.line_number
     }
+    pub const fn token(&self) -> Token<'a> {
+        self.token
+    }
 }
-impl Display for LexerError {
+impl Display for LexerError<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Error at line {}, column {}: {}",
-            self.line_number, self.column_number, self.kind
+            "Error lexing {} at line {}, column {}: {}",
+            self.token.lexeme(),
+            self.line_number,
+            self.column_number,
+            self.kind,
         )
     }
 }
-impl std::error::Error for LexerError {}
+impl std::error::Error for LexerError<'_> {}
