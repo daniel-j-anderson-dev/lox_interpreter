@@ -21,10 +21,15 @@ fn main() -> Result<(), io::Error> {
 }
 
 fn run_prompt() -> Result<(), io::Error> {
+    writeln!(io::stdout(), "Lox REPL. type \"exit\" to quit")?;
     loop {
         let source = get_input("> ")?;
         print_tokens(&source)?;
+        if source.to_lowercase() == "exit" {
+            break;
+        }
     }
+    Ok(())
 }
 
 fn run_file(path: &str) -> Result<(), io::Error> {
