@@ -44,8 +44,12 @@ impl Display for Token<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Ln {:>3}, Col {:>3} {:>-1?} {:?}",
-            self.line, self.column, self.kind, self.lexeme
+            "{}{:?} Ln {:>3}, Col {:>3}  {:?}",
+            " ".repeat(16 - self.kind.as_str().len()),
+            self.kind,
+            self.line,
+            self.column,
+            self.lexeme
         )
     }
 }
@@ -113,6 +117,50 @@ impl TokenKind {
             "var" => TokenKind::Var,
             "while" => TokenKind::While,
             _ => TokenKind::Identifier,
+        }
+    }
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Unrecognized => "Unrecognized",
+            Self::EndOfFile => "EndOfFile",
+            Self::LeftParentheses => "LeftParentheses",
+            Self::RightParentheses => "RightParentheses",
+            Self::LeftBrace => "LeftBrace",
+            Self::RightBrace => "RightBrace",
+            Self::Comma => "Comma",
+            Self::Dot => "Dot",
+            Self::Minus => "Minus",
+            Self::Plus => "Plus",
+            Self::Semicolon => "Semicolon",
+            Self::Slash => "Slash",
+            Self::Star => "Star",
+            Self::Bang => "Bang",
+            Self::BangEqual => "BangEqual",
+            Self::Equal => "Equal",
+            Self::EqualEqual => "EqualEqual",
+            Self::Greater => "Greater",
+            Self::GreaterEqual => "GreaterEqual",
+            Self::Less => "Less",
+            Self::LessEqual => "LessEqual",
+            Self::Identifier => "Identifier",
+            Self::StringLiteral => "StringLiteral",
+            Self::NumberLiteral => "NumberLiteral",
+            Self::And => "And",
+            Self::Class => "Class",
+            Self::Else => "Else",
+            Self::False => "False",
+            Self::Fun => "Fun",
+            Self::For => "For",
+            Self::If => "If",
+            Self::Nil => "Nil",
+            Self::Or => "Or",
+            Self::Print => "Print",
+            Self::Return => "Return",
+            Self::Super => "Super",
+            Self::This => "This",
+            Self::True => "True",
+            Self::Var => "Var",
+            Self::While => "While",
         }
     }
     pub const fn is_end_of_file(&self) -> bool {
