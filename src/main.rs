@@ -19,7 +19,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     match arguments.len() {
         1 => run_prompt()?,
         2 => run_file(&arguments[1])?,
-        _ => eprintln!("Usage: lox [script]"),
+        _ => io::stderr().write_all(b"Usage: lox [script]\n")?,
     };
 
     Ok(())
