@@ -1,6 +1,6 @@
 use crate::{
     abstract_syntax_tree::Expression,
-    lexer::{Lexer, LexerError},
+    lexer::{Lexer, error::LexerError},
     token::{Token, TokenKind},
 };
 
@@ -17,14 +17,14 @@ impl<'a> Parser<'a> {
         }
     }
     fn consume_current_token_of_kind(&mut self, kinds: &[TokenKind]) -> bool {
-        for kind in kinds {
-            if self.is_current_token(*kind) {
+        kinds.iter().any(|&kind| {
+            if self.is_current_token(kind) {
                 self.consume_current_token();
-                return true;
+                true
+            } else {
+                false
             }
-        }
-
-        false
+        })
     }
     fn is_current_token(&self, kind: TokenKind) -> bool {
         !self.is_at_end() && self.peek_current_token().kind() == kind
@@ -127,7 +127,8 @@ impl<'a> Parser<'a> {
         if self.consume_current_token_of_kind(&[TokenKind::Nil]) {
             return Ok(Box::new(Expression::Literal(self.peek_previous_token())));
         }
-        if self.consume_current_token_of_kind(&[TokenKind::Number, TokenKind::String]) {
+        if self.consume_current_token_of_kind(&[TokenKind::NumberLiteral, TokenKind::StringLiteral])
+        {
             return Ok(Box::new(Expression::Literal(self.peek_previous_token())));
         }
         if self.consume_current_token_of_kind(&[TokenKind::LeftParentheses]) {
@@ -188,7 +189,7 @@ impl std::fmt::Display for ParseError<'_> {
             "Error parsing {:?} token: \"{}\" on line {}: {}",
             self.token.kind(),
             self.token.lexeme(),
-            self.token.line_number(),
+            self.token.line(),
             self.kind
         )
     }
@@ -201,7 +202,7 @@ fn test_parser() {
     let mut parser = Parser::try_from(lexer).unwrap();
 
     loop {
-        match parser.equality_rule() {
+        match parser.expression_rule() {
             Ok(expression) => println!("{}", expression),
             Err(parse_error) if !parse_error.token.is_end_of_file() => eprintln!("{}", parse_error),
             _ => break,
