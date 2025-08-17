@@ -154,7 +154,7 @@ impl<'a> Lexer<'a> {
 
     /// Returns the current lexeme of `source` defined by the range `lexeme_start..lexeme_end`
     fn lexeme(&self) -> &'a str {
-        &self
+        self
             .source
             .get(self.lexeme_start..self.lexeme_end)
             .unwrap_or("")
