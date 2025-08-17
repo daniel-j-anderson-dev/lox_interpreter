@@ -7,7 +7,7 @@ use std::{
 fn main() -> Result<(), io::Error> {
     let args = env::args().collect::<Vec<_>>();
 
-    if !args.get(0).is_some_and(|s| s.ends_with("lox")) {
+    if !args.first().is_some_and(|s| s.ends_with("lox")) {
         panic!("Expected the first argument to be the program name")
     }
 
