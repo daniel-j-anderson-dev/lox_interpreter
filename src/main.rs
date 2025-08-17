@@ -1,14 +1,17 @@
-use lox::lexer::Lexer;
 use std::{
-    env, fs,
+    env,
+    error::Error,
+    fs,
     io::{self, Write},
 };
 
-fn main() -> Result<(), io::Error> {
+use lox::lexer::Lexer;
+
+fn main() -> Result<(), Box<dyn Error>> {
     let args = env::args().collect::<Vec<_>>();
 
     if !args.first().is_some_and(|s| s.ends_with("lox")) {
-        panic!("Expected the first argument to be the program name")
+        Err("Expected the first argument to be the program name")?
     }
 
     match args.len() {
@@ -21,10 +24,11 @@ fn main() -> Result<(), io::Error> {
 }
 
 fn run_prompt() -> Result<(), io::Error> {
-    writeln!(io::stdout(), "Lox REPL. type \"exit\" to quit")?;
+    let mut stdout = io::stdout();
+    writeln!(stdout, "Lox REPL. type \"exit\" to quit")?;
     loop {
         let source = get_input("> ")?;
-        print_tokens(&source)?;
+        print_tokens(&source, &mut stdout)?;
         if source.to_lowercase() == "exit" {
             break;
         }
@@ -34,17 +38,15 @@ fn run_prompt() -> Result<(), io::Error> {
 
 fn run_file(path: &str) -> Result<(), io::Error> {
     let source = fs::read_to_string(path)?;
-    print_tokens(&source)?;
+    print_tokens(&source, io::stdout())?;
     Ok(())
 }
 
-fn print_tokens(source: &str) -> Result<(), io::Error> {
-    let mut stdout = io::stdout();
-    let mut stderr = io::stderr();
+fn print_tokens(source: &str, mut output: impl Write) -> Result<(), io::Error> {
     for possible_token in Lexer::new(source) {
         match possible_token {
-            Ok(token) => writeln!(stdout, "{}", token)?,
-            Err(error) => writeln!(stderr, "{}", error)?,
+            Ok(token) => writeln!(output, "{}", token)?,
+            Err(error) => writeln!(output, "{}", error)?,
         }
     }
     Ok(())
