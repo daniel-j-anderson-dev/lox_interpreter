@@ -8,17 +8,17 @@ use std::{
 use lox::lexer::Lexer;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let args = env::args().collect::<Vec<_>>();
+    let arguments = env::args().collect::<Vec<_>>();
 
-    if let Some(first_arg) = args.first()
+    if let Some(first_arg) = arguments.first()
         && first_arg.ends_with("lox")
     {
         Err("Expected the first argument to be the program name")?
     }
 
-    match args.len() {
+    match arguments.len() {
         1 => run_prompt()?,
-        2 => run_file(&args[1])?,
+        2 => run_file(&arguments[1])?,
         _ => eprintln!("Usage: lox [script]"),
     };
 
