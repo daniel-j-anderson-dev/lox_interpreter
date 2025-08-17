@@ -34,10 +34,12 @@ fn run_file(path: &str) -> Result<(), io::Error> {
 }
 
 fn print_tokens(source: &str) -> Result<(), io::Error> {
+    let mut stdout = io::stdout();
+    let mut stderr = io::stderr();
     for possible_token in Lexer::new(source) {
         match possible_token {
-            Ok(token) => writeln!(io::stdout(), "{}", token)?,
-            Err(error) => writeln!(io::stderr(), "{}", error)?,
+            Ok(token) => writeln!(stdout, "{}", token)?,
+            Err(error) => writeln!(stderr, "{}", error)?,
         }
     }
     Ok(())
