@@ -164,10 +164,7 @@ impl TokenKind {
         }
     }
     pub const fn is_end_of_file(&self) -> bool {
-        match self {
-            TokenKind::EndOfFile => true,
-            _ => false,
-        }
+        matches!(self, TokenKind::EndOfFile)
     }
     pub fn is_any(&self, kinds: &[TokenKind]) -> bool {
         kinds.contains(self)
