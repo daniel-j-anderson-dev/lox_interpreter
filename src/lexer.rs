@@ -137,10 +137,6 @@ impl<'a> Lexer<'a> {
 
 // accessors
 impl<'a> Lexer<'a> {
-    fn current_byte_available(&self) -> bool {
-        self.lexeme_end < self.source.len()
-    }
-
     fn out_of_source_bytes(&self) -> bool {
         self.lexeme_end >= self.source.len()
     }
