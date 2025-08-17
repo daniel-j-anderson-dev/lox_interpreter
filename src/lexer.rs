@@ -148,7 +148,7 @@ impl<'a> Lexer<'a> {
     /// # Safety
     /// Caller must guarantee that `self.lexeme_end` >= `self.source.len()` (use [Lexer::current_byte_available] to check)
     unsafe fn current_byte_unchecked(&self) -> u8 {
-        debug_assert!(self.lexeme_end >= self.source.len());
+        debug_assert!(self.lexeme_end < self.source.len());
         *unsafe { self.source.as_bytes().get_unchecked(self.lexeme_end) }
     }
 
