@@ -10,7 +10,9 @@ use lox::lexer::Lexer;
 fn main() -> Result<(), Box<dyn Error>> {
     let args = env::args().collect::<Vec<_>>();
 
-    if !args.first().is_some_and(|s| s.ends_with("lox")) {
+    if let Some(first_arg) = args.first()
+        && first_arg.ends_with("lox")
+    {
         Err("Expected the first argument to be the program name")?
     }
 
