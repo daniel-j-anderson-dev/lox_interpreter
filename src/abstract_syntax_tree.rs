@@ -58,12 +58,17 @@ fn ast_print() {
 
     let expression = Expression::Binary {
         left_operand: Box::new(Expression::Unary {
-            operator: Token::new(TokenKind::Minus, "-", 0),
-            right_operand: Box::new(Expression::Literal(Token::new(TokenKind::Number, "123", 0))),
+            operator: Token::new(TokenKind::Minus, "-", 0, 0),
+            right_operand: Box::new(Expression::Literal(Token::new(
+                TokenKind::NumberLiteral,
+                "123",
+                0,
+                0,
+            ))),
         }),
-        operator: Token::new(TokenKind::Star, "*", 0),
+        operator: Token::new(TokenKind::Star, "*", 0, 0),
         right_operand: Box::new(Expression::Grouping(Box::new(Expression::Literal(
-            Token::new(TokenKind::Number, "45.67", 0),
+            Token::new(TokenKind::NumberLiteral, "45.67", 0, 0),
         )))),
     };
 

@@ -4,21 +4,29 @@ use std::fmt::{Debug, Display};
 pub struct Token<'a> {
     kind: TokenKind,
     lexeme: &'a str,
-    line_number: usize,
+    line: usize,
+    column: usize,
 }
 impl<'a> Token<'a> {
-    pub const fn new(kind: TokenKind, lexeme: &'a str, line_number: usize) -> Self {
+    pub const fn new(
+        kind: TokenKind,
+        lexeme: &'a str,
+        line: usize,
+        column: usize,
+    ) -> Self {
         Self {
             kind,
             lexeme,
-            line_number,
+            line,
+            column,
         }
     }
-    pub const fn end_of_file(line_number: usize) -> Token<'static> {
+    pub const fn end_of_file(line: usize, column: usize) -> Token<'static> {
         Token {
             kind: TokenKind::EndOfFile,
             lexeme: "",
-            line_number,
+            line,
+            column,
         }
     }
     pub const fn kind(&self) -> TokenKind {
@@ -30,13 +38,16 @@ impl<'a> Token<'a> {
     pub const fn is_end_of_file(&self) -> bool {
         self.kind.is_end_of_file()
     }
-    pub const fn line_number(&self) -> usize {
-        self.line_number
+    pub const fn line(&self) -> usize {
+        self.line
+    }
+    pub const fn column(&self) -> usize {
+        self.column
     }
 }
 impl Display for Token<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {:?} {}", self.line_number, self.kind, self.lexeme)
+        write!(f, "{} {:?} {}", self.line, self.kind, self.lexeme)
     }
 }
 
@@ -64,8 +75,8 @@ pub enum TokenKind {
     Less,
     LessEqual,
     Identifier,
-    String,
-    Number,
+    StringLiteral,
+    NumberLiteral,
     And,
     Class,
     Else,
@@ -112,13 +123,7 @@ impl TokenKind {
         }
     }
     pub fn is_any(&self, kinds: &[TokenKind]) -> bool {
-        for kind in kinds {
-            if *self == *kind {
-                return true;
-            }
-        }
-
-        false
+        kinds.contains(self)
     }
     pub const EQUALITY_OPERATORS: &[Self] = &[TokenKind::BangEqual, TokenKind::EqualEqual];
     pub const COMPARISON_OPERATORS: &[Self] = &[
