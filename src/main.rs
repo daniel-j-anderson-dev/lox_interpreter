@@ -2,7 +2,7 @@ use std::{
     env,
     error::Error,
     fs,
-    io::{self, Write},
+    io::{self, BufRead, BufReader, Write},
 };
 
 use lox::lexer::Lexer;
@@ -27,10 +27,15 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 fn run_prompt() -> Result<(), io::Error> {
     let mut stdout = io::stdout();
+    let mut stdin = BufReader::new(io::stdin());
+
     writeln!(stdout, "Lox REPL. type \"exit\" to quit")?;
+
     loop {
-        let source = get_input("> ")?;
+        let source = get_input("> ", &mut stdin, &mut stdout)?;
+
         print_tokens(&source, &mut stdout)?;
+
         if source.to_lowercase() == "exit" {
             break;
         }
@@ -54,16 +59,17 @@ fn print_tokens(source: &str, mut output: impl Write) -> Result<(), io::Error> {
     Ok(())
 }
 
-fn get_input(prompt: &str) -> Result<String, io::Error> {
-    {
-        let mut stdout = io::stdout();
-        stdout.write_all(prompt.as_bytes())?;
-        stdout.flush()?;
-    }
+fn get_input(
+    prompt: &str,
+    mut input: impl BufRead,
+    mut output: impl Write,
+) -> Result<String, io::Error> {
+    output.write_all(prompt.as_bytes())?;
+    output.flush()?;
 
-    let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
-    input.truncate(input.trim_end().len());
+    let mut line = String::new();
+    input.read_line(&mut line)?;
+    line.truncate(line.trim_end().len());
 
-    Ok(input)
+    Ok(line)
 }
