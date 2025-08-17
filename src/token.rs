@@ -8,12 +8,7 @@ pub struct Token<'a> {
     column: usize,
 }
 impl<'a> Token<'a> {
-    pub const fn new(
-        kind: TokenKind,
-        lexeme: &'a str,
-        line: usize,
-        column: usize,
-    ) -> Self {
+    pub const fn new(kind: TokenKind, lexeme: &'a str, line: usize, column: usize) -> Self {
         Self {
             kind,
             lexeme,
@@ -47,7 +42,11 @@ impl<'a> Token<'a> {
 }
 impl Display for Token<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {:?} {}", self.line, self.kind, self.lexeme)
+        write!(
+            f,
+            "Ln {:>3}, Col {:>3} {:>-1?} {:?}",
+            self.line, self.column, self.kind, self.lexeme
+        )
     }
 }
 

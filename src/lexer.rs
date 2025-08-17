@@ -275,15 +275,6 @@ pub mod error {
         UnterminatedStringLiteral,
         NumberTrailingDot,
     }
-    impl core::fmt::Display for LexerErrorKind {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> core::fmt::Result {
-            match self {
-                LexerErrorKind::NumberTrailingDot => write!(f, "{:?}", self),
-                LexerErrorKind::UnterminatedStringLiteral => write!(f, "{:?}", self),
-                LexerErrorKind::Unrecognized => write!(f, "Unrecognized token"),
-            }
-        }
-    }
 
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub struct LexerError<'a> {
@@ -305,11 +296,11 @@ pub mod error {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             write!(
                 f,
-                "Error lexing {} at line {}, column {}: {}",
-                self.token.lexeme(),
+                "Ln {} Col {}: Error lexing: {:?} {:?}",
                 self.token.line(),
                 self.token.column(),
-                self.kind,
+                self.token.lexeme(),
+                self.kind
             )
         }
     }
