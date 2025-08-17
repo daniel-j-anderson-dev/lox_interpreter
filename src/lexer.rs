@@ -1,314 +1,317 @@
-use std::fmt::Display;
+use unicode_segmentation::UnicodeSegmentation;
 
-use super::token::{Token, TokenKind};
+use crate::{
+    lexer::error::{LexerError, LexerErrorKind},
+    token::{
+        Token,
+        TokenKind::{self, *},
+    },
+};
 
-/// Lazily split lox source code into tokens.
-/// When used as an [Iterator]: [None] represents a [TokenKind::EndOfFile]
+/// Lazily split lox source code into [Token]s.
+/// When used as an [Iterator]: [None] represents a [EndOfFile]
 pub struct Lexer<'a> {
     source: &'a str,
     lexeme_start: usize,
     /// index of the byte currently being processed. one after the last byte in the current lexeme
     lexeme_end: usize,
-    line_number: usize,
+    line: usize,
+    column: usize,
     end_of_file_emitted: bool,
 }
-impl<'a> Iterator for Lexer<'a> {
-    type Item = Result<Token<'a>, LexerError<'a>>;
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.end_of_file_emitted {
-            return None;
+// the whole point
+impl<'a> Lexer<'a> {
+    pub fn next_token(&mut self) -> Result<Token<'a>, LexerError<'a>> {
+        // [1]
+        if self.out_of_source_bytes() {
+            self.end_of_file_emitted = true;
+            return Ok(self.token(EndOfFile));
         }
 
-        match self.next_token() {
-            Ok(token) => Some(Ok(token)),
-            Err(error) => Some(Err(error)),
+        self.start_lexeme();
+
+        // SAFETY: the current byte is available. See [1]
+        let previous_byte = unsafe { self.current_byte_unchecked() };
+        self.extend_lexeme();
+
+        match previous_byte {
+            b'(' => Ok(self.token(LeftParentheses)),
+            b')' => Ok(self.token(RightParentheses)),
+            b'{' => Ok(self.token(LeftBrace)),
+            b'}' => Ok(self.token(RightBrace)),
+            b',' => Ok(self.token(Comma)),
+            b'.' => Ok(self.token(Dot)),
+            b'-' => Ok(self.token(Minus)),
+            b'+' => Ok(self.token(Plus)),
+            b';' => Ok(self.token(Semicolon)),
+            b'*' => Ok(self.token(Star)),
+            b'!' => Ok(
+                if let LexemeStatus::Extended = self.extend_lexeme_if(byte_is(b'=')) {
+                    self.token(BangEqual)
+                } else {
+                    self.token(Bang)
+                },
+            ),
+            b'=' => Ok(
+                if let LexemeStatus::Extended = self.extend_lexeme_if(byte_is(b'=')) {
+                    self.token(EqualEqual)
+                } else {
+                    self.token(Equal)
+                },
+            ),
+            b'<' => Ok(
+                if let LexemeStatus::Extended = self.extend_lexeme_if(byte_is(b'=')) {
+                    self.token(LessEqual)
+                } else {
+                    self.token(Less)
+                },
+            ),
+            b'>' => Ok(
+                if let LexemeStatus::Extended = self.extend_lexeme_if(byte_is(b'=')) {
+                    self.token(GreaterEqual)
+                } else {
+                    self.token(Greater)
+                },
+            ),
+            b'/' if self.current_byte_is(b'/') => {
+                self.extend_lexeme_while(byte_is_not(b'\n'));
+                self.next_token()
+            }
+            b'/' => Ok(self.token(Slash)),
+            b'"' => {
+                self.extend_lexeme_while(byte_is_not(b'"'));
+                if self.out_of_source_bytes() {
+                    Err(self.error(LexerErrorKind::UnterminatedStringLiteral))
+                } else {
+                    self.extend_lexeme();
+                    Ok(Token::new(
+                        StringLiteral,
+                        trim_first_and_last(self.lexeme()),
+                        self.line,
+                        self.column,
+                    ))
+                }
+            }
+            b'\n' => {
+                self.line += 1;
+                self.column = 0;
+                self.next_token()
+            }
+            _ if previous_byte.is_ascii_whitespace() => {
+                self.extend_lexeme_while(byte_is_non_newline_whitespace);
+                self.next_token()
+            }
+            _ if previous_byte.is_ascii_digit() => {
+                self.extend_lexeme_while(byte_is_digit);
+                if let LexemeStatus::Extended = self.extend_lexeme_if(byte_is(b'.')) {
+                    self.extend_lexeme_while(byte_is_digit);
+                }
+                Ok(self.token(NumberLiteral))
+            }
+            _ if byte_is_identifier(previous_byte) => {
+                self.extend_lexeme_while(byte_is_identifier);
+                let kind = TokenKind::parse_keyword(self.lexeme());
+                Ok(self.token(kind))
+            }
+            _ => {
+                self.extend_lexeme_while(byte_is_unrecognized);
+                Err(self.error(LexerErrorKind::Unrecognized))
+            }
         }
     }
 }
+
+// constructors
 impl<'a> Lexer<'a> {
     pub const fn new(source: &'a str) -> Self {
         Self {
             source,
             lexeme_start: 0,
             lexeme_end: 0,
+            line: 1,
+            column: 0,
             end_of_file_emitted: false,
-            line_number: 1,
         }
     }
+}
 
-    pub fn next_token(&mut self) -> Result<Token<'a>, LexerError<'a>> {
-        if !self.current_byte_available() {
-            self.end_of_file_emitted = true;
-            return Ok(Token::end_of_file(self.line_number));
-        }
-
-        self.lexeme_start = self.lexeme_end;
-
-        let previous_byte = self.get_current_byte();
-
-        self.consume_current_byte();
-
-        let token = match previous_byte {
-            b'(' => self.get_current_token(TokenKind::LeftParentheses),
-            b')' => self.get_current_token(TokenKind::RightParentheses),
-            b'{' => self.get_current_token(TokenKind::LeftBrace),
-            b'}' => self.get_current_token(TokenKind::RightBrace),
-            b',' => self.get_current_token(TokenKind::Comma),
-            b'.' => self.get_current_token(TokenKind::Dot),
-            b'-' => self.get_current_token(TokenKind::Minus),
-            b'+' => self.get_current_token(TokenKind::Plus),
-            b';' => self.get_current_token(TokenKind::Semicolon),
-            b'*' => self.get_current_token(TokenKind::Star),
-            b'!' if self.current_byte_available() && self.get_current_byte() == b'=' => {
-                self.consume_current_byte();
-                self.get_current_token(TokenKind::BangEqual)
-            }
-            b'!' => self.get_current_token(TokenKind::Bang),
-            b'=' if self.current_byte_available() && self.get_current_byte() == b'=' => {
-                self.consume_current_byte();
-                self.get_current_token(TokenKind::EqualEqual)
-            }
-            b'=' => self.get_current_token(TokenKind::Equal),
-            b'<' if self.current_byte_available() && self.get_current_byte() == b'=' => {
-                self.consume_current_byte();
-                self.get_current_token(TokenKind::LessEqual)
-            }
-            b'<' => self.get_current_token(TokenKind::Less),
-            b'>' if self.current_byte_available() && self.get_current_byte() == b'=' => {
-                self.consume_current_byte();
-                self.get_current_token(TokenKind::GreaterEqual)
-            }
-            b'>' => self.get_current_token(TokenKind::Greater),
-            b'/' if self.current_byte_available() && self.get_current_byte() == b'/' => {
-                self.consume_comment_line();
-                self.next_token()?
-            }
-            b'/' => self.get_current_token(TokenKind::Slash),
-            b'"' => {
-                self.consume_string_literal()?;
-
-                // ignore start and end '"'
-                let string_literal_lexeme =
-                    &self.source[self.lexeme_start + 1..self.lexeme_end - 1];
-                Token::new(TokenKind::String, string_literal_lexeme, self.line_number)
-            }
-            number if number.is_ascii_digit() => {
-                self.consume_number_literal()?;
-                self.get_current_token(TokenKind::Number)
-            }
-            alpha if alpha.is_ascii_alphabetic() || alpha == b'_' => {
-                self.consume_identifier();
-                let token_kind = TokenKind::parse_keyword(self.get_current_lexeme());
-                self.get_current_token(token_kind)
-            }
-            whitespace if whitespace.is_ascii_whitespace() => {
-                if whitespace == b'\n' {
-                    self.line_number += 1;
-                }
-                self.consume_whitespace();
-                self.next_token()?
-            }
-            _ => {
-                self.consume_unrecognized_lexeme();
-                let unrecognized_token = self.get_current_token(TokenKind::Unrecognized);
-                return Err(self.error(unrecognized_token, LexerErrorKind::Unrecognized));
-            }
-        };
-
-        Ok(token)
-    }
-
-    /// Increments `self.lexeme_end` making the current lexeme one byte larger
-    fn consume_current_byte(&mut self) {
-        self.lexeme_end += 1;
-    }
-
+// accessors
+impl<'a> Lexer<'a> {
     fn current_byte_available(&self) -> bool {
         self.lexeme_end < self.source.len()
     }
-    fn next_byte_available(&self) -> bool {
-        self.lexeme_end + 1 < self.source.len()
+
+    fn out_of_source_bytes(&self) -> bool {
+        self.lexeme_end >= self.source.len()
     }
 
-    /// # Panics
-    /// when `self.lexeme_end` >= `self.source.len()`. use [Self::current_byte_available] to check
-    fn get_current_byte(&self) -> u8 {
-        self.source.as_bytes()[self.lexeme_end]
-    }
-    /// # Panics
-    /// when `self.lexeme_end + 1` >= `self.source.len()`. use [Self::next_byte_available] to check
-    fn get_next_byte(&self) -> u8 {
-        self.source.as_bytes()[self.lexeme_end + 1]
+    /// # Safety
+    /// Caller must guarantee that `self.lexeme_end` >= `self.source.len()` (use [Lexer::current_byte_available] to check)
+    unsafe fn current_byte_unchecked(&self) -> u8 {
+        debug_assert!(self.lexeme_end >= self.source.len());
+        *unsafe { self.source.as_bytes().get_unchecked(self.lexeme_end) }
     }
 
-    /// Returns the current lexeme defined by the range `self.lexeme_start..self.lexeme_end`
-    fn get_current_lexeme(&self) -> &'a str {
-        &self.source[self.lexeme_start..self.lexeme_end]
+    fn current_byte(&self) -> Option<u8> {
+        self.source.as_bytes().get(self.lexeme_end).copied()
     }
 
-    /// Creates a new [Token] using [Self::get_current_lexeme] for the lexeme and the given [TokenKind]
-    fn get_current_token(&self, kind: TokenKind) -> Token<'a> {
-        Token::new(kind, self.get_current_lexeme(), self.line_number)
-    }
-
-    /// Makes the current lexeme include all bytes up to and including the first `'\n'`. Only call after `"//"` is found
-    fn consume_comment_line(&mut self) {
-        while self.current_byte_available() && self.get_current_byte() != b'\n' {
-            self.consume_current_byte();
-        }
-    }
-    /// Makes the current lexeme include all bytes up to the first non-ascii whitespace (see [u8::is_ascii_whitespace])
-    fn consume_whitespace(&mut self) {
-        while self.current_byte_available() && self.get_current_byte().is_ascii_whitespace() {
-            if self.get_current_byte() == b'\n' {
-                self.line_number += 1;
-            }
-            self.consume_current_byte();
-        }
-    }
-
-    /// Makes the current lexeme include all bytes up to and including the closing `'"'`. Only call after an opening '"'
-    /// # Error
-    /// When there is no closing `'"'`
-    fn consume_string_literal(&mut self) -> Result<(), LexerError<'a>> {
-        while self.current_byte_available() {
-            let current_byte = self.get_current_byte();
-
-            self.consume_current_byte();
-
-            if current_byte == b'"' {
-                return Ok(());
-            }
-        }
-
-        let token = self.get_current_token(TokenKind::String);
-        Err(self.error(token, LexerErrorKind::UnterminatedStringLiteral))
-    }
-    fn consume_number_literal(&mut self) -> Result<(), LexerError<'a>> {
-        // consume all digit bytes before the dot
-        while self.current_byte_available() && self.get_current_byte().is_ascii_digit() {
-            self.consume_current_byte();
-        }
-
-        if !self.current_byte_available() {
-            return Ok(());
-        }
-
-        if self.get_current_byte() == b'.' {
-            // there must be a number after the dot
-            if !self.next_byte_available() || !self.get_next_byte().is_ascii_digit() {
-                let token = self.get_current_token(TokenKind::Number);
-                return Err(self.error(token, LexerErrorKind::NumberTrailingDot));
-            }
-
-            // consume the dot
-            self.consume_current_byte();
-
-            while self.current_byte_available() && self.get_current_byte().is_ascii_digit() {
-                self.consume_current_byte();
-            }
-        }
-
-        Ok(())
-    }
-    fn consume_identifier(&mut self) {
-        while self.current_byte_available()
-            && (self.get_current_byte().is_ascii_alphanumeric() || self.get_current_byte() == b'_')
-        {
-            self.consume_current_byte();
-        }
-    }
-    fn is_current_byte_unrecognized(&self) -> bool {
-        match self.get_current_byte() {
-            b'(' | b')' | b'{' | b'}' | b',' | b'.' | b'-' | b'+' | b';' | b'*' | b'!' | b'='
-            | b'<' | b'>' | b'/' | b'"' => true,
-            b if b.is_ascii_alphanumeric() || b.is_ascii_whitespace() || b == b'_' => false,
-            _ => true,
-        }
-    }
-    fn consume_unrecognized_lexeme(&mut self) {
-        while self.current_byte_available() && self.is_current_byte_unrecognized() {
-            self.consume_current_byte();
-        }
-    }
-}
-
-// Error helpers
-impl<'a> Lexer<'a> {
-    fn calculate_lexeme_position(&self) -> (usize, usize) {
-        use unicode_segmentation::UnicodeSegmentation;
-
-        let mut column_number = 1;
-
-        for (i, _c) in self
+    /// Returns the current lexeme of `source` defined by the range `lexeme_start..lexeme_end`
+    fn lexeme(&self) -> &'a str {
+        &self
             .source
-            .lines()
-            .nth(self.line_number - 1)
-            .unwrap()
-            .grapheme_indices(true)
+            .get(self.lexeme_start..self.lexeme_end)
+            .unwrap_or("")
+    }
+
+    fn current_byte_is(&self, target: u8) -> bool {
+        self.current_byte().is_some_and(|b| b == target)
+    }
+}
+
+// mutators
+impl<'a> Lexer<'a> {
+    /// consumes the current lexeme so that a new a new token can be lexed.
+    fn start_lexeme(&mut self) {
+        self.column += count_grapheme_clusters(self.lexeme());
+        self.lexeme_start = self.lexeme_end;
+    }
+
+    /// Increments `self.lexeme_end` making the current lexeme one byte larger
+    fn extend_lexeme(&mut self) {
+        self.lexeme_end = self.lexeme_end.saturating_add(1);
+    }
+
+    /// If the current byte makes `predicate` return `true` then the lexeme will extended. See [LexemeStatus]
+    fn extend_lexeme_if(&mut self, predicate: impl FnOnce(u8) -> bool) -> LexemeStatus {
+        if let Some(current_byte) = self.current_byte()
+            && predicate(current_byte)
         {
-            if i == self.lexeme_start {
-                break;
+            self.extend_lexeme();
+            LexemeStatus::Extended
+        } else {
+            LexemeStatus::NotExtended
+        }
+    }
+
+    /// keep extending the lexeme until `predicate` returns false
+    fn extend_lexeme_while(&mut self, mut predicate: impl FnMut(u8) -> bool) {
+        while let LexemeStatus::Extended = self.extend_lexeme_if(&mut predicate) {}
+    }
+}
+
+/// The return type of [Lexer::extend_lexeme_if].
+/// It represents if the lexeme was extended because the current byte made `predicate return true`
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+enum LexemeStatus {
+    Extended,
+    NotExtended,
+}
+
+// helpers
+impl<'a> Lexer<'a> {
+    /// Creates a new [Token] using [Self::lexeme] for the lexeme and the given [TokenKind]
+    fn token(&self, kind: TokenKind) -> Token<'a> {
+        let lexeme = if let EndOfFile = kind {
+            ""
+        } else {
+            self.lexeme()
+        };
+        Token::new(kind, lexeme, self.line, self.column)
+    }
+    fn error(&mut self, kind: LexerErrorKind) -> LexerError<'a> {
+        LexerError::new(kind, self.token(Unrecognized))
+    }
+}
+
+impl<'a> Iterator for Lexer<'a> {
+    type Item = Result<Token<'a>, LexerError<'a>>;
+    fn next(&mut self) -> Option<Self::Item> {
+        use core::ops::Not;
+        self.end_of_file_emitted.not().then(|| self.next_token())
+    }
+}
+
+fn byte_is_unrecognized(b: u8) -> bool {
+    match b {
+        b'(' | b')' | b'{' | b'}' | b',' | b'.' | b'-' | b'+' | b';' | b'*' | b'!' | b'='
+        | b'<' | b'>' | b'/' | b'"'
+            if b.is_ascii_alphanumeric() || b.is_ascii_whitespace() || b == b'_' =>
+        {
+            true
+        }
+        _ => true,
+    }
+}
+fn byte_is_non_newline_whitespace(b: u8) -> bool {
+    b != b'\n' && b.is_ascii_whitespace()
+}
+fn byte_is_digit(b: u8) -> bool {
+    b.is_ascii_digit()
+}
+fn byte_is_identifier(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_'
+}
+fn byte_is(target: u8) -> impl Fn(u8) -> bool {
+    move |b| b == target
+}
+fn byte_is_not(target: u8) -> impl Fn(u8) -> bool {
+    move |b| b != target
+}
+fn trim_first_and_last(s: &str) -> &str {
+    s.get(1..s.len().saturating_sub(1)).unwrap_or("")
+}
+/// Returns the number of extended grapheme clusters in a `s`. see [str::graphemes] from the [unicode_segmentation] crate
+fn count_grapheme_clusters(s: &str) -> usize {
+    s.graphemes(true).count()
+}
+
+pub mod error {
+    use crate::token::Token;
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum LexerErrorKind {
+        Unrecognized,
+        UnterminatedStringLiteral,
+        NumberTrailingDot,
+    }
+    impl core::fmt::Display for LexerErrorKind {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> core::fmt::Result {
+            match self {
+                LexerErrorKind::NumberTrailingDot => write!(f, "{:?}", self),
+                LexerErrorKind::UnterminatedStringLiteral => write!(f, "{:?}", self),
+                LexerErrorKind::Unrecognized => write!(f, "Unrecognized token"),
             }
-
-            column_number += 1;
-        }
-
-        (self.line_number, column_number)
-    }
-    fn error(&mut self, token: Token<'a>, kind: LexerErrorKind) -> LexerError<'a> {
-        let (line_number, column_number) = self.calculate_lexeme_position();
-
-        LexerError {
-            kind,
-            token,
-            line_number,
-            column_number,
         }
     }
-}
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum LexerErrorKind {
-    Unrecognized,
-    UnterminatedStringLiteral,
-    NumberTrailingDot,
-}
-impl Display for LexerErrorKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            LexerErrorKind::NumberTrailingDot => write!(f, "{:?}", self),
-            LexerErrorKind::UnterminatedStringLiteral => write!(f, "{:?}", self),
-            LexerErrorKind::Unrecognized => write!(f, "Unrecognized token"),
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct LexerError<'a> {
+        kind: LexerErrorKind,
+        token: Token<'a>,
+    }
+    impl<'a> LexerError<'a> {
+        pub const fn new(kind: LexerErrorKind, token: Token<'a>) -> Self {
+            Self { kind, token }
+        }
+        pub const fn token(&self) -> Token<'a> {
+            self.token
+        }
+        pub const fn kind(&self) -> LexerErrorKind {
+            self.kind
         }
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LexerError<'a> {
-    kind: LexerErrorKind,
-    token: Token<'a>,
-    line_number: usize,
-    column_number: usize,
-}
-impl<'a> LexerError<'a> {
-    pub const fn line_number(&self) -> usize {
-        self.line_number
+    impl core::fmt::Display for LexerError<'_> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(
+                f,
+                "Error lexing {} at line {}, column {}: {}",
+                self.token.lexeme(),
+                self.token.line(),
+                self.token.column(),
+                self.kind,
+            )
+        }
     }
-    pub const fn token(&self) -> Token<'a> {
-        self.token
-    }
+    impl std::error::Error for LexerError<'_> {}
 }
-impl Display for LexerError<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Error lexing {} at line {}, column {}: {}",
-            self.token.lexeme(),
-            self.line_number,
-            self.column_number,
-            self.kind,
-        )
-    }
-}
-impl std::error::Error for LexerError<'_> {}
