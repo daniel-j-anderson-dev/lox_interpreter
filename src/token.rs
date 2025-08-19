@@ -68,7 +68,7 @@ pub enum TokenKind {
     Plus,
     Semicolon,
     Slash,
-    Star,
+    Asterisk,
     Bang,
     BangEqual,
     Equal,
@@ -133,7 +133,7 @@ impl TokenKind {
             Self::Plus => "Plus",
             Self::Semicolon => "Semicolon",
             Self::Slash => "Slash",
-            Self::Star => "Star",
+            Self::Asterisk => "Asterisk",
             Self::Bang => "Bang",
             Self::BangEqual => "BangEqual",
             Self::Equal => "Equal",
@@ -177,6 +177,6 @@ impl TokenKind {
         TokenKind::GreaterEqual,
     ];
     pub const TERM_OPERATORS: &[Self] = &[TokenKind::Plus, TokenKind::Minus];
-    pub const FACTOR_OPERATORS: &[Self] = &[TokenKind::Star, TokenKind::Slash];
+    pub const FACTOR_OPERATORS: &[Self] = &[TokenKind::Asterisk, TokenKind::Slash];
     pub const UNARY_OPERATORS: &[Self] = &[TokenKind::Bang, TokenKind::Minus];
 }

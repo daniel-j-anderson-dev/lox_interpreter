@@ -44,7 +44,7 @@ impl<'a> Lexer<'a> {
             b'-' => Ok(self.token(Minus)),
             b'+' => Ok(self.token(Plus)),
             b';' => Ok(self.token(Semicolon)),
-            b'*' => Ok(self.token(Star)),
+            b'*' => Ok(self.token(Asterisk)),
             b'!' => Ok(
                 if let LexemeStatus::Extended = self.extend_lexeme_if(byte_is(b'=')) {
                     self.token(BangEqual)

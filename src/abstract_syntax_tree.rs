@@ -66,7 +66,7 @@ fn ast_print() {
                 0,
             ))),
         }),
-        operator: Token::new(TokenKind::Star, "*", 0, 0),
+        operator: Token::new(TokenKind::Asterisk, "*", 0, 0),
         right_operand: Box::new(Expression::Grouping(Box::new(Expression::Literal(
             Token::new(TokenKind::NumberLiteral, "45.67", 0, 0),
         )))),
