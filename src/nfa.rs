@@ -10,7 +10,7 @@ pub enum State {
     LeftBrace,
     RightBrace,
     Comma,
-    Dot,
+    Period,
     Minus,
     Plus,
     Semicolon,
@@ -31,22 +31,26 @@ pub enum State {
     StringBody,
     StringLiteral,
     NewLine,
+    PrePeriodNumberBody,
+    PostPeriodNumberBody,
+    NumberLiteral,
 }
 impl State {
     pub const fn is_final(&self) -> bool {
         match self {
-            LeftParentheses | RightParentheses | LeftBrace | RightBrace | Comma | Dot | Minus
-            | Plus | Semicolon | Asterisk | Bang | Equal | Greater | Less | BangEqual
-            | EqualEqual | GreaterEqual | LessEqual | StringLiteral => true,
+            LeftParentheses | RightParentheses | LeftBrace | RightBrace | Comma | Period
+            | Minus | Plus | Semicolon | Asterisk | Bang | Equal | Greater | Less | BangEqual
+            | EqualEqual | GreaterEqual | LessEqual | StringLiteral | NumberLiteral => true,
             _ => false,
         }
     }
     pub const fn is_symbol_consumed(&self) -> bool {
         match self {
-            Start | LeftParentheses | RightParentheses | LeftBrace | RightBrace | Comma | Dot
-            | Minus | Plus | Semicolon | Asterisk | BangEqual | EqualEqual | GreaterEqual
-            | LessEqual | CheckForBangEqual | CheckForEqualEqual | CheckForLessEqual
-            | CheckForGreaterEqual | OpenQuote | StringLiteral | StringBody | NewLine => true,
+            Start | LeftParentheses | RightParentheses | LeftBrace | RightBrace | Comma
+            | Period | Minus | Plus | Semicolon | Asterisk | BangEqual | EqualEqual
+            | GreaterEqual | LessEqual | CheckForBangEqual | CheckForEqualEqual
+            | CheckForLessEqual | CheckForGreaterEqual | OpenQuote | StringLiteral | StringBody
+            | NewLine | PrePeriodNumberBody | PostPeriodNumberBody => true,
             _ => false,
         }
     }
@@ -57,7 +61,7 @@ impl State {
             LeftBrace => TokenKind::LeftBrace,
             RightBrace => TokenKind::RightBrace,
             Comma => TokenKind::Comma,
-            Dot => TokenKind::Dot,
+            Period => TokenKind::Dot,
             Minus => TokenKind::Minus,
             Plus => TokenKind::Plus,
             Semicolon => TokenKind::Semicolon,
@@ -71,6 +75,7 @@ impl State {
             Less => TokenKind::Less,
             LessEqual => TokenKind::LessEqual,
             StringLiteral => TokenKind::StringLiteral,
+            NumberLiteral => TokenKind::NumberLiteral,
             _ => TokenKind::Unrecognized,
         }
     }
@@ -84,7 +89,7 @@ const fn transition(state: State, symbol: u8) -> State {
         (Start, b'{') => LeftBrace,
         (Start, b'}') => RightBrace,
         (Start, b',') => Comma,
-        (Start, b'.') => Dot,
+        (Start, b'.') => Period,
         (Start, b'-') => Minus,
         (Start, b'+') => Plus,
         (Start, b';') => Semicolon,
@@ -109,6 +114,13 @@ const fn transition(state: State, symbol: u8) -> State {
         (Start, b'"') => OpenQuote,
         (StringBody, b'"') | (OpenQuote, b'"') => StringLiteral,
         (StringBody, _) | (OpenQuote, _) => StringBody,
+
+        // number literals
+        (Start, _) if symbol.is_ascii_digit() => PrePeriodNumberBody,
+        (PrePeriodNumberBody, b'.') => PostPeriodNumberBody,
+        (PrePeriodNumberBody, _) if symbol.is_ascii_digit() => PrePeriodNumberBody,
+        (PostPeriodNumberBody, _) if symbol.is_ascii_digit() => PostPeriodNumberBody,
+        (PrePeriodNumberBody, _) | (PostPeriodNumberBody, _) => NumberLiteral,
 
         _ => state,
     }
@@ -158,8 +170,8 @@ fn lex<'a>(source: &'a str) -> impl Iterator<Item = Token<'a>> + use<'a> {
 
 #[test]
 fn test_lex() {
-    let source = "!(=)<{>\n}!=,==.<=->=+;*\"\"\"this is a second string literal!\"";
+    let source = "!(=)<{>\n}!=,==.<=->=+;*\"this is a second string literal!\"\n12\n12.\n12.12";
     for token in lex(source) {
-        println!("{token}    {:?}", token.kind());
+        println!("{token}");
     }
 }
