@@ -1,3 +1,5 @@
+pub mod nfa;
+
 pub mod lexer;
 pub mod token;
 
