@@ -1,5 +1,7 @@
 use State::*;
 
+use crate::token::{Token, TokenKind};
+
 #[derive(Debug, Clone, Copy)]
 pub enum State {
     Start,
@@ -12,7 +14,7 @@ pub enum State {
     Minus,
     Plus,
     Semicolon,
-    Star,
+    Asterisk,
     CheckForBangEqual,
     Bang,
     BangEqual,
@@ -25,23 +27,51 @@ pub enum State {
     CheckForLessEqual,
     Less,
     LessEqual,
+    OpenQuote,
+    StringBody,
+    StringLiteral,
+    NewLine,
 }
 impl State {
     pub const fn is_final(&self) -> bool {
         match self {
             LeftParentheses | RightParentheses | LeftBrace | RightBrace | Comma | Dot | Minus
-            | Plus | Semicolon | Star | Bang | Equal | Greater | Less | BangEqual | EqualEqual
-            | GreaterEqual | LessEqual => true,
+            | Plus | Semicolon | Asterisk | Bang | Equal | Greater | Less | BangEqual
+            | EqualEqual | GreaterEqual | LessEqual | StringLiteral => true,
             _ => false,
         }
     }
     pub const fn is_symbol_consumed(&self) -> bool {
         match self {
             Start | LeftParentheses | RightParentheses | LeftBrace | RightBrace | Comma | Dot
-            | Minus | Plus | Semicolon | Star | BangEqual | EqualEqual | GreaterEqual
+            | Minus | Plus | Semicolon | Asterisk | BangEqual | EqualEqual | GreaterEqual
             | LessEqual | CheckForBangEqual | CheckForEqualEqual | CheckForLessEqual
-            | CheckForGreaterEqual => true,
+            | CheckForGreaterEqual | OpenQuote | StringLiteral | StringBody | NewLine => true,
             _ => false,
+        }
+    }
+    pub const fn as_token_kind(&self) -> TokenKind {
+        match self {
+            LeftParentheses => TokenKind::LeftParentheses,
+            RightParentheses => TokenKind::RightParentheses,
+            LeftBrace => TokenKind::LeftBrace,
+            RightBrace => TokenKind::RightBrace,
+            Comma => TokenKind::Comma,
+            Dot => TokenKind::Dot,
+            Minus => TokenKind::Minus,
+            Plus => TokenKind::Plus,
+            Semicolon => TokenKind::Semicolon,
+            Asterisk => TokenKind::Asterisk,
+            Bang => TokenKind::Bang,
+            BangEqual => TokenKind::BangEqual,
+            Equal => TokenKind::Equal,
+            EqualEqual => TokenKind::EqualEqual,
+            Greater => TokenKind::Greater,
+            GreaterEqual => TokenKind::GreaterEqual,
+            Less => TokenKind::Less,
+            LessEqual => TokenKind::LessEqual,
+            StringLiteral => TokenKind::StringLiteral,
+            _ => TokenKind::Unrecognized,
         }
     }
 }
@@ -58,7 +88,8 @@ const fn transition(state: State, symbol: u8) -> State {
         (Start, b'-') => Minus,
         (Start, b'+') => Plus,
         (Start, b';') => Semicolon,
-        (Start, b'*') => Star,
+        (Start, b'*') => Asterisk,
+        (Start, b'\n') => NewLine,
 
         // two symbol tokens
         (Start, b'!') => CheckForBangEqual,
@@ -74,44 +105,61 @@ const fn transition(state: State, symbol: u8) -> State {
         (CheckForLessEqual, b'=') => LessEqual,
         (CheckForLessEqual, _) => Less,
 
+        // string literals
+        (Start, b'"') => OpenQuote,
+        (StringBody, b'"') | (OpenQuote, b'"') => StringLiteral,
+        (StringBody, _) | (OpenQuote, _) => StringBody,
+
         _ => state,
     }
 }
 
-#[test]
-fn perform_lexical_analysis_with_nfa() {
-    let source = b"!(=)<{>}!=,==.<=->=+;*";
+fn lex<'a>(source: &'a str) -> impl Iterator<Item = Token<'a>> + use<'a> {
     let mut lexeme_start = 0;
     let mut lexeme_end = 0;
+    let mut line = 1;
+    let mut column = 0;
     let mut state = Start;
 
-    loop {
-        let symbol = match source.get(lexeme_end) {
-            Some(byte) => *byte,
-            None => break,
-        };
+    core::iter::from_fn(move || {
+        loop {
+            let &symbol = source.as_bytes().get(lexeme_end)?;
 
-        let new_state = transition(state, symbol);
+            let new_state = transition(state, symbol);
 
-        if new_state.is_symbol_consumed() {
-            lexeme_end += 1;
-        }
-
-        println!(
-            "({state:?}, {:?}) -> {new_state:?}\n{:?}\nsymbol {}consumed\n",
-            symbol as char,
-            &source[lexeme_start..lexeme_end],
             if new_state.is_symbol_consumed() {
-                ""
-            } else {
-                "not "
-            },
-        );
+                lexeme_end += 1;
+            }
 
-        state = new_state;
-        if state.is_final() {
-            state = Start;
-            lexeme_start = lexeme_end;
+            state = new_state;
+
+            match state {
+                NewLine => {
+                    state = Start;
+                    line += 1;
+                    column = 0;
+                    lexeme_start = lexeme_end;
+                }
+                _ if state.is_final() => {
+                    let lexeme = &source[lexeme_start..lexeme_end];
+
+                    let token = Token::new(state.as_token_kind(), lexeme, line, column);
+
+                    state = Start;
+                    column += lexeme.len();
+                    lexeme_start = lexeme_end;
+                    return Some(token);
+                }
+                _ => continue,
+            }
         }
+    })
+}
+
+#[test]
+fn test_lex() {
+    let source = "!(=)<{>\n}!=,==.<=->=+;*\"\"\"this is a second string literal!\"";
+    for token in lex(source) {
+        println!("{token}    {:?}", token.kind());
     }
 }
